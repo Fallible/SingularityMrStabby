@@ -143,12 +143,14 @@ void loop(void)
     fruits[i]->listen();
 
     // Send command
-    Serial.print(F("Sending to "));
+    Serial.print(F("Device: "));
     Serial.print(i);
-    Serial.println();
+    Serial.print(": ");
     ble->println(command);
 
     // Check response status
+    int strength = ble->readline_parseInt();
+    Serial.println(strength);
     ble->waitForOK();
     delay(500);
 
