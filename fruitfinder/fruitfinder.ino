@@ -111,7 +111,7 @@ void setup(void)
 
     /* Disable command echo from Bluefruit */
     ble->echo(false);
-
+    ble->verbose(false);
     Serial.println("Requesting Bluefruit info:");
     /* Print Bluefruit information */
     ble->info();
@@ -131,29 +131,31 @@ void loop(void)
   Serial.print(F("AT > "));
 
   // Check for user input and echo it back if anything was found
-  char command[BUFSIZE+1];
-  getUserInput(command, BUFSIZE);
-  
-  for (int i=NUM_FRUITS-1; i >= 0; --i) {
+  //char command[BUFSIZE+1];
+  //getUserInput(command, BUFSIZE);
+  char const *command = "AT+BLEGETRSSI";
+  while (true) {
+    for (int i=NUM_FRUITS-1; i >= 0; --i) {
 
-    if (! fruits[i]->is_init()) {
-      continue;
+      if (! fruits[i]->is_init()) {
+          continue;
+      }
+      Adafruit_BluefruitLE_UART *ble = fruits[i]->uart();
+      fruits[i]->listen();
+
+      // Send command
+      Serial.print(F("Device: "));
+      Serial.print(i);
+      Serial.print(": ");
+      ble->println(command);
+
+      // Check response status
+      int strength = ble->readline_parseInt();
+      Serial.println(strength);
+      ble->waitForOK();
+      delay(500);
+
     }
-    Adafruit_BluefruitLE_UART *ble = fruits[i]->uart();
-    fruits[i]->listen();
-
-    // Send command
-    Serial.print(F("Device: "));
-    Serial.print(i);
-    Serial.print(": ");
-    ble->println(command);
-
-    // Check response status
-    int strength = ble->readline_parseInt();
-    Serial.println(strength);
-    ble->waitForOK();
-    delay(500);
-
   }
 }
 
