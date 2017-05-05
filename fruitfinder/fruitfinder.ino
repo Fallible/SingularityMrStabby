@@ -52,15 +52,19 @@
                             bonding data stored on the chip, meaning the
                             central device won't be able to reconnect.
     -----------------------------------------------------------------------*/
-    #define FACTORYRESET_ENABLE      1
+    #define FACTORYRESET_ENABLE      0
 /*=========================================================================*/
 
 
 // Create the bluefruit object, either software serial...uncomment these lines
-int const NUM_FRUITS{ 3 };
+int const NUM_FRUITS{ 5 };
+
 fruit* fruits[NUM_FRUITS];
 
-
+char const *MODE_LED_TOGGLE_CMD = "AT+HWMODELED=MANUAL,ON";
+char const *MODE_LED_OFF_CMD = "AT+HWMODELED=MANUAL,OFF";
+char const *GET_RSSI_CMD = "AT+BLEGETRSSI";
+ 
 // A small helper
 void error(const __FlashStringHelper*err) {
   Serial.println(err);
@@ -75,9 +79,11 @@ void error(const __FlashStringHelper*err) {
 /**************************************************************************/
 void setup(void)
 {
-  fruits[0] = new fruit(69, 2, 8, 3, -1);
-  fruits[1] = new fruit(68, 4, 9, 5, -1);
-  fruits[2] = new fruit(67, 6, 10, 7, -1);
+  fruits[0] = new fruit(50, 23, 2, 22, -1);    //center
+  fruits[1] = new fruit(51, 25, 3, 24, -1);    // LL
+  fruits[2] = new fruit(52, 27, 4, 26, -1);    // UL
+  fruits[3] = new fruit(53, 29, 5, 28, -1);    // UR
+  fruits[4] = new fruit(69, 31, 6, 30, -1);    // LR
 
   while (!Serial);  // required for Flora & Micro
   delay(500);
@@ -112,9 +118,10 @@ void setup(void)
     /* Disable command echo from Bluefruit */
     ble->echo(false);
     ble->verbose(false);
-    Serial.println("Requesting Bluefruit info:");
+    ble->println(MODE_LED_OFF_CMD);
+    //Serial.println("Requesting Bluefruit info:");
     /* Print Bluefruit information */
-    ble->info();
+    //ble->info();
     fruits[i]->is_init(true);
   } // for
 
@@ -131,33 +138,58 @@ void loop(void)
   Serial.print(F("AT > "));
 
   // Check for user input and echo it back if anything was found
-  //char command[BUFSIZE+1];
-  //getUserInput(command, BUFSIZE);
-  char const *command = "AT+BLEGETRSSI";
+  
+  char strengths[NUM_FRUITS] = { 0 };
+  // signal range is -99 to 0 with -99 being the weakest
+  char strongestSignal = 0;
+  char strongestFruitIdx = 0;
+  char previousStrongestFruitIdx = 0;
+
+  
+  Serial.println();  
+  Serial.println("BEGIN_FRUIT_DATA");  
+  
   while (true) {
-    for (int i=NUM_FRUITS-1; i >= 0; --i) {
+    for (int i=0; i < NUM_FRUITS; i++) {
 
       if (! fruits[i]->is_init()) {
           continue;
       }
+
       Adafruit_BluefruitLE_UART *ble = fruits[i]->uart();
       fruits[i]->listen();
 
-      // Send command
-      Serial.print(F("Device: "));
-      Serial.print(i);
-      Serial.print(": ");
-      ble->println(command);
+      ble->println(GET_RSSI_CMD);
 
       // Check response status
-      int strength = ble->readline_parseInt();
-      Serial.println(strength);
+      char s = (char)ble->readline_parseInt();
+      if (s > strongestSignal) {
+        strongestSignal = s;
+        strongestFruitIdx = i;
+      }
+      
       ble->waitForOK();
-      delay(500);
-
+      strengths[i] = s;
     }
-  }
-}
+
+    if (strongestFruitIdx != previousStrongestFruitIdx) {
+      fruits[previousStrongestFruitIdx]->uart()->println(MODE_LED_OFF_CMD);
+      fruits[previousStrongestFruitIdx]->uart()->waitForOK();
+      fruits[strongestFruitIdx]->uart()->println(MODE_LED_TOGGLE_CMD);
+      fruits[strongestFruitIdx]->uart()->waitForOK();
+      
+    }
+    
+    
+    char const flag = 127;
+    Serial.write(&flag, 1);
+    for (int i=0; i < NUM_FRUITS; i++) {
+        Serial.write(&(strengths[i]), 1);
+    }
+    
+    delay(200);
+  } // while
+} // loop()
 
 /**************************************************************************/
 /*!
